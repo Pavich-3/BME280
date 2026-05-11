@@ -10,12 +10,19 @@
 
 #include "bme280_regs.h"
 #include "stdint.h"
+#include "stddef.h"
 
+#define BME280_HUMIDITY_SIZE (BME280_CALIB_HUMI_ADDR_END - BME280_CALIB_HUMI_ADDR_START)
+#define BME280_PRESS_SIZE (BME280_CALIB_PRES_ADDR_END - BME280_CALIB_PRES_ADDR_START)
+#define BME280_TEMPERATURE_SIZE (BME280_CALIB_TEMP_ADDR_END - BME280_CALIB_TEMP_ADDR_START)
+
+typedef int8_t bme280_int8_t;
 typedef uint8_t bme280_uint8_t;
 typedef int16_t bme280_int16_t;
 typedef uint16_t bme280_uint16_t;
 typedef int32_t bme280_int32_t;
 typedef uint32_t bme280_uint32_t;
+typedef int64_t bme280_int64_t;
 
 const uint8_t BME280_RESET = 0xB6;
 
@@ -75,7 +82,7 @@ typedef enum {
 
 typedef enum {
     BME280_TEMPERATURE_OVERSAMPLING_SKIPPED = 0b000,
-    BME280_TEMPEREATURE_OVERSAMPLING_X1 = 0b001,
+    BME280_TEMPERATURE_OVERSAMPLING_X1 = 0b001,
     BME280_TEMPERATURE_OVERSAMPLING_X2 = 0b010,
     BME280_TEMPERATURE_OVERSAMPLING_X4 = 0b011,
     BME280_TEMPERATURE_OVERSAMPLING_X8 = 0b100,
@@ -83,13 +90,39 @@ typedef enum {
 } bme280_temperature_ovs_t;
 
 typedef struct {
-    bme280_status_t status;
-    bme280_uint8_t reset;
+    uint8_t bme280_humi_calib_buf[BME280_HUMIDITY_SIZE];
+    uint8_t bme280_pres_calib_buf[BME280_PRESS_SIZE];
+    uint8_t bme280_temp_calib_buf[BME280_TEMPERATURE_SIZE];
+} bme280_calibration_buf_t;
 
-    bme280_humidity_ovs_t bme280_humidity_ovs;
-    bme280_pressure_ovs_t bme280_pressure_ovs;
-    bme280_temperature_ovs_t bme280_temperature_ovs;
-} bme280_t;
+typedef struct {
+    bme280_uint16_t dig_T1;
+    bme280_int16_t dig_T2;
+    bme280_int16_t dig_T3;
+
+    bme280_uint16_t dig_P1;
+    bme280_int16_t dig_P2;
+    bme280_int16_t dig_P3;
+    bme280_int16_t dig_P4;
+    bme280_int16_t dig_P5;
+    bme280_int16_t dig_P6;
+    bme280_int16_t dig_P7;
+    bme280_int16_t dig_P8;
+    bme280_int16_t dig_P9;
+
+    bme280_uint8_t dig_H1;
+    bme280_int16_t dig_H2;
+    bme280_uint8_t dig_H3;
+    bme280_int16_t dig_H4;
+    bme280_int16_t dig_H5;
+    bme280_int8_t dig_H6;
+} bme280_calibration_data_t;
+
+typedef struct {
+    bme280_uint16_t bme280_humidity_raw;
+    bme280_uint32_t bme280_pressure_raw;
+    bme280_uint32_t bme280_temperature_raw;
+} bme280_raw_t;
 
 typedef struct {
     bme280_standby_t bme280_standby;
@@ -98,10 +131,21 @@ typedef struct {
 } bme280_config_t;
 
 typedef struct {
-    bme280_uint16_t bme280_humidity_raw;
-    bme280_uint32_t bme280_pressure_raw;
-    bme280_uint32_t bme280_temperature_raw;
-} bme280_raw_t;
+    bme280_status_t status;
+    bme280_uint8_t reset;
+
+    bme280_humidity_ovs_t bme280_humidity_ovs;
+    bme280_pressure_ovs_t bme280_pressure_ovs;
+    bme280_temperature_ovs_t bme280_temperature_ovs;
+
+    bme280_uint16_t _bme280HUMIRegister[BME280_HUMIDITY_SIZE];
+    bme280_uint16_t _bme280PRESRegister[BME280_PRESS_SIZE];
+    bme280_uint16_t _bme280TEMPRegister[BME280_TEMPERATURE_SIZE];
+
+    bme280_calibration_buf_t bme280_calib_buf;
+    bme280_calibration_data_t bme280_calib_data;
+    bme280_raw_t bme280_raw;
+} bme280_t;
 
 bme280_status_t bme280_init(bme280_t* dev, const bme280_bus_t* bus);
 bme280_status_t bme280_reset(bme280_t* dev);
@@ -109,6 +153,6 @@ bme280_status_t bme280_reset(bme280_t* dev);
 bme280_status_t bme280_read_calibration(bme280_t* dev);
 bme280_status_t bme280_set_config(bme280_t* dev, bme280_config_t cfg);
 bme280_status_t bme280_read_raw(bme280_t* dev, bme280_raw_t* raw);
-bme280_status_t bme280_read(bme280_t* dev, float* T, float* H, float* P);
+bme280_status_t bme280_read(bme280_t* dev, float* T, bme280_uint32_t* H, bme280_uint32_t* P);
 
 #endif /* BME280_BME280_H_ */
