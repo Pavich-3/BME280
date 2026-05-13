@@ -173,7 +173,7 @@ bme280_status_t bme280_reset(bme280_t* dev);
 bme280_status_t bme280_set_mode(bme280_t* dev, bme280_mode_t mode);
 
 bme280_status_t bme280_read_calibration(bme280_t* dev);
-bme280_status_t bme280_set_config(bme280_t* dev, bme280_config_t cfg);
+bme280_status_t bme280_set_config(bme280_t* dev, bme280_config_t* cfg);
 bme280_status_t bme280_read_raw(bme280_t* dev);
 bme280_status_t bme280_read(bme280_t* dev, bme280_uint32_t* T, bme280_uint32_t* H, bme280_uint32_t* P);
 bme280_status_t bme280_convertCalibData(bme280_t* dev);

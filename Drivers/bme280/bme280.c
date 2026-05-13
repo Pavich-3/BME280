@@ -102,7 +102,7 @@ bme280_status_t bme280_read_calibration(bme280_t* dev) {
     return BME280_STATUS_OK;
 }
 
-bme280_status_t bme280_set_config(bme280_t* dev, bme280_config_t cfg) {
+bme280_status_t bme280_set_config(bme280_t* dev, bme280_config_t* cfg) {
     bme280_bus_t* bus = &dev->bme280_bus;
     if (!dev || !bus->read || !bus->write) {
         return BME280_STATUS_INVALID_ARG;
@@ -117,7 +117,7 @@ bme280_status_t bme280_set_config(bme280_t* dev, bme280_config_t cfg) {
         return BME280_STATUS_ERROR;
     }
 
-    if (bus->write(bus->dev_addr, BME280_CONFIG_ADDR, (cfg.bme280_standby | cfg.bme280_filter | cfg.bme280_spi_status), 1, bus->ctx) != BME280_STATUS_OK) {
+    if (bus->write(bus->dev_addr, BME280_CONFIG_ADDR, (cfg->bme280_standby | cfg->bme280_filter | cfg->bme280_spi_status), 1, bus->ctx) != BME280_STATUS_OK) {
         return BME280_STATUS_ERROR;
     }
 
