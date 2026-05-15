@@ -140,7 +140,7 @@ typedef bme280_status_t (*bme280_read_fn_t)(
 typedef bme280_status_t (*bme280_write_fn_t)(
         uint8_t dev_addr,
         uint8_t reg_addr,
-        const uint8_t* data,
+        uint8_t* data,
         uint8_t len,
         void* ctx
 );
@@ -169,14 +169,13 @@ typedef struct {
 } bme280_t;
 
 bme280_status_t bme280_init(bme280_t* dev, const bme280_bus_t* bus);
+bme280_status_t bme280_configure(bme280_t* dev, const bme280_config_t* cfg);
 bme280_status_t bme280_reset(bme280_t* dev);
 bme280_status_t bme280_set_mode(bme280_t* dev, bme280_mode_t mode);
 
 bme280_status_t bme280_read_calibration(bme280_t* dev);
-bme280_status_t bme280_set_config(bme280_t* dev, bme280_config_t* cfg);
 bme280_status_t bme280_read_raw(bme280_t* dev);
-bme280_status_t bme280_read(bme280_t* dev, bme280_uint32_t* T, bme280_uint32_t* H, bme280_uint32_t* P);
-bme280_status_t bme280_convertCalibData(bme280_t* dev);
+bme280_status_t bme280_read(bme280_t* dev, bme280_int32_t* T, bme280_uint32_t* H, bme280_uint32_t* P);
 
 bme280_status_t bme280_weatherMonitoring(bme280_t* dev, bme280_config_t* cfg);
 bme280_status_t bme280_humiditySensing(bme280_t* dev, bme280_config_t* cfg);

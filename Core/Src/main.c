@@ -50,11 +50,11 @@
 
 /* USER CODE BEGIN PV */
 bme280_t bme280Handler = {0};
-bme280_t bme280Config = {0};
+bme280_config_t bme280Config = {0};
 
 uint8_t transactionFlag = {0};
 
-bme280_uint32_t temperatureBuffer = 0;
+bme280_int32_t temperatureBuffer = 0;
 bme280_uint32_t pressBuffer = 0;
 bme280_uint32_t humidityBuffer = 0;
 char uartMessage[50] = {0};
@@ -182,15 +182,15 @@ void SystemClock_Config(void)
 
 /* USER CODE BEGIN 4 */
 bme280_status_t i2c_read(uint8_t dev_addr, uint8_t reg_addr, uint8_t* data, uint8_t len, void* ctx) {
-    if (HAL_I2C_Mem_Read_IT((I2C_HandleTypeDef*)ctx, (uint16_t)dev_addr, (uint16_t)reg_addr, (uint16_t)sizeof(reg_addr), data, len) != HAL_OK) {
+    if (HAL_I2C_Mem_Read_IT((I2C_HandleTypeDef*)ctx, (uint16_t)dev_addr, (uint16_t)reg_addr, I2C_MEMADD_SIZE_8BIT, data, len) != HAL_OK) {
         return BME280_STATUS_ERROR;
     } else {
         return BME280_STATUS_OK;
     }
 }
 
-bme280_status_t i2c_write(uint8_t dev_addr, uint8_t reg_addr, const uint8_t* data, uint8_t len, void* ctx) {
-    if (HAL_I2C_Mem_Write_IT((I2C_HandleTypeDef*)ctx, dev_addr, reg_addr, sizeof(reg_addr), data, len) != HAL_OK) {
+bme280_status_t i2c_write(uint8_t dev_addr, uint8_t reg_addr, uint8_t* data, uint8_t len, void* ctx) {
+    if (HAL_I2C_Mem_Write_IT((I2C_HandleTypeDef*)ctx, dev_addr, reg_addr, I2C_MEMADD_SIZE_8BIT, data, len) != HAL_OK) {
         return BME280_STATUS_ERROR;
     } else {
         return BME280_STATUS_OK;
@@ -202,15 +202,16 @@ HAL_StatusTypeDef BME280_Init(void) {
         return HAL_ERROR;
     }
 
-    bme280Handler.bme280_bus.dev_addr = BME280_I2C_DEVICE_ADDR_GND;
-    bme280Handler.bme280_bus.ctx = &hi2c1;
-    bme280Handler.bme280_bus.read = i2c_read;
-    bme280Handler.bme280_bus.write = i2c_write;
+    bme280_bus_t bme280_bus = {0};
+    bme280_bus.dev_addr = BME280_I2C_DEVICE_ADDR_GND;
+    bme280_bus.ctx = &hi2c1;
+    bme280_bus.read = i2c_read;
+    bme280_bus.write = i2c_write;
 
-    if (bme280_set_config(&bme280Handler, &bme280Config) != BME280_STATUS_OK) {
+    if (bme280_init(&bme280Handler, &bme280_bus) != BME280_STATUS_OK) {
         return HAL_ERROR;
     }
-    if (bme280_init(&bme280Handler, &bme280Config) != BME280_STATUS_OK) {
+    if (bme280_configure(&bme280Handler, &bme280Config) != BME280_STATUS_OK) {
         return HAL_ERROR;
     }
 
