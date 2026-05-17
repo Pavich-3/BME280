@@ -49,15 +49,15 @@
 /* Private variables ---------------------------------------------------------*/
 
 /* USER CODE BEGIN PV */
-bme280_t bme280Handler = {0};
-bme280_config_t bme280Config = {0};
+bme280_t bme280Handler = {0};        // main device handle; mode/oversampling filled by preset
+bme280_config_t bme280Config = {0};  // config register (0xF5) settings: standby, filter, SPI
 
-volatile uint8_t transactionFlag = {1};
+volatile uint8_t transactionFlag = {1};  // set to 1 by UART TX callback to trigger next measurement
 
-bme280_int32_t temperatureBuffer = 0;
-bme280_uint32_t pressBuffer = 0;
-bme280_uint32_t humidityBuffer = 0;
-char uartMessage[50] = {0};
+bme280_int32_t  temperatureBuffer = 0;  // compensated temperature in integer degrees C
+bme280_uint32_t pressBuffer       = 0;  // compensated pressure in integer Pa
+bme280_uint32_t humidityBuffer    = 0;  // compensated humidity in integer %RH
+char uartMessage[50] = {0};             // formatted output string
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
@@ -122,10 +122,10 @@ int main(void)
     while (1)
     {
         if (transactionFlag) {
-            bme280_read_raw(&bme280Handler);
-            bme280_read(&bme280Handler, &temperatureBuffer, &humidityBuffer, &pressBuffer);
-            sprintf(uartMessage, "T: %ld C, H: %lu %%, P: %lu Pa\n", (long)temperatureBuffer, (unsigned long)humidityBuffer, (unsigned long)pressBuffer);
-            HAL_UART_Transmit_IT(&huart3, (uint8_t*)uartMessage, strlen(uartMessage));
+            bme280_read_raw(&bme280Handler);                                                                                                    // trigger/poll measurement, store raw ADC values
+            bme280_read(&bme280Handler, &temperatureBuffer, &humidityBuffer, &pressBuffer);                                                     // apply compensation formulas
+            sprintf(uartMessage, "T: %ld C, H: %lu %%, P: %lu Pa\n", (long)temperatureBuffer, (unsigned long)humidityBuffer, (unsigned long)pressBuffer);  // format output
+            HAL_UART_Transmit_IT(&huart3, (uint8_t*)uartMessage, strlen(uartMessage));                                                         // send; next cycle starts in TxCpltCallback
             transactionFlag = 0;
         }
         /* USER CODE END WHILE */
@@ -180,46 +180,49 @@ void SystemClock_Config(void)
 }
 
 /* USER CODE BEGIN 4 */
+
+// BME280 bus glue: blocking I2C read via HAL, ctx is expected to be I2C_HandleTypeDef*
 bme280_status_t i2c_read(uint8_t dev_addr, uint8_t reg_addr, uint8_t* data, uint8_t len, void* ctx) {
     if (HAL_I2C_Mem_Read((I2C_HandleTypeDef*)ctx, (uint16_t)dev_addr, (uint16_t)reg_addr, I2C_MEMADD_SIZE_8BIT, data, len, HAL_MAX_DELAY) != HAL_OK) {
         return BME280_STATUS_ERROR;
-    } else {
-        return BME280_STATUS_OK;
     }
+    return BME280_STATUS_OK;
 }
 
+// BME280 bus glue: blocking I2C write via HAL, ctx is expected to be I2C_HandleTypeDef*
 bme280_status_t i2c_write(uint8_t dev_addr, uint8_t reg_addr, uint8_t* data, uint8_t len, void* ctx) {
     if (HAL_I2C_Mem_Write((I2C_HandleTypeDef*)ctx, dev_addr, reg_addr, I2C_MEMADD_SIZE_8BIT, data, len, HAL_MAX_DELAY) != HAL_OK) {
         return BME280_STATUS_ERROR;
-    } else {
-        return BME280_STATUS_OK;
     }
+    return BME280_STATUS_OK;
 }
 
+// Configures preset, wires up I2C bus, initializes device, configures registers, reads calibration
 HAL_StatusTypeDef BME280_Init(void) {
-    if (bme280_indoorNavigation(&bme280Handler, &bme280Config) != BME280_STATUS_OK) {
+    if (bme280_indoorNavigation(&bme280Handler, &bme280Config) != BME280_STATUS_OK) {  // fill mode/oversampling/filter
         return HAL_ERROR;
     }
 
     bme280_bus_t bme280_bus = {0};
-    bme280_bus.dev_addr = BME280_I2C_DEVICE_ADDR_GND << 1;
-    bme280_bus.ctx = &hi2c1;
-    bme280_bus.read = i2c_read;
-    bme280_bus.write = i2c_write;
+    bme280_bus.dev_addr = BME280_I2C_DEVICE_ADDR_GND << 1;  // 7-bit addr shifted to 8-bit HAL format
+    bme280_bus.ctx      = &hi2c1;                            // passed as void* to i2c_read/write
+    bme280_bus.read     = i2c_read;
+    bme280_bus.write    = i2c_write;
 
-    if (bme280_init(&bme280Handler, &bme280_bus) != BME280_STATUS_OK) {
+    if (bme280_init(&bme280Handler, &bme280_bus) != BME280_STATUS_OK) {          // verify chip ID
         return HAL_ERROR;
     }
-    if (bme280_configure(&bme280Handler, &bme280Config) != BME280_STATUS_OK) {
+    if (bme280_configure(&bme280Handler, &bme280Config) != BME280_STATUS_OK) {   // write 0xF5/0xF2/0xF4
         return HAL_ERROR;
     }
-    if (bme280_read_calibration(&bme280Handler) != BME280_STATUS_OK) {
+    if (bme280_read_calibration(&bme280Handler) != BME280_STATUS_OK) {           // read once; coefficients never change
         return HAL_ERROR;
     }
 
     return HAL_OK;
 }
 
+// UART TX complete interrupt: signals main loop to start next measurement
 void HAL_UART_TxCpltCallback(UART_HandleTypeDef *huart) {
     if (huart->Instance == USART3) {
         transactionFlag = 1;
