@@ -59,7 +59,8 @@ bme280_status_t bme280_reset(bme280_t* dev) {
     dev->reset = BME280_RESET;
     dev->bme280_bus = bme280_bus;
 
-    if (dev->bme280_bus.write(dev->bme280_bus.dev_addr, BME280_RESET_ADDR, &BME280_RESET, 1, dev->bme280_bus.ctx) != BME280_STATUS_OK) {
+    uint8_t resetCmd = BME280_RESET;
+    if (dev->bme280_bus.write(dev->bme280_bus.dev_addr, BME280_RESET_ADDR, &resetCmd, 1, dev->bme280_bus.ctx) != BME280_STATUS_OK) {
         return BME280_STATUS_ERROR;
     }
 
@@ -118,12 +119,12 @@ bme280_status_t bme280_read_raw(bme280_t* dev) {
 
     uint32_t timeout = TIMEOUT;
     if (dev->bme280_mode == FORCED_MODE) {
-        if (--timeout <= 0) { return BME280_STATUS_ERROR; }
-
         if (bme280_set_mode(dev, FORCED_MODE) != BME280_STATUS_OK) { return BME280_STATUS_ERROR; }
 
         uint8_t status = 0;
         do {
+            if (--timeout == 0) { return BME280_STATUS_ERROR; }
+
             if (bus->read(bus->dev_addr, BME280_STATUS_ADDR, &status, 1, bus->ctx) != BME280_STATUS_OK) {
                 dev->status = BME280_STATUS_ERROR;
                 return BME280_STATUS_ERROR;
@@ -223,6 +224,49 @@ bme280_status_t bme280_read(bme280_t* dev, bme280_int32_t* T, bme280_uint32_t* H
     v_x1_u32r = (v_x1_u32r < 0 ? 0 : v_x1_u32r);
     v_x1_u32r = (v_x1_u32r > 419430400? 419430400: v_x1_u32r);
     *H = (bme280_uint32_t)(v_x1_u32r >> 12) / 1024;
+
+    return BME280_STATUS_OK;
+}
+
+bme280_status_t bme280_read_double(bme280_t* dev, double* T, double* H, double* P) {
+    if (!dev || !T || !H || !P) { return BME280_STATUS_INVALID_ARG; }
+
+    bme280_calibration_data_t* calib_data = &dev->bme280_calib_data;
+    bme280_int32_t adc_T = dev->bme280_raw.bme280_temperature_raw;
+    bme280_int32_t adc_P = dev->bme280_raw.bme280_pressure_raw;
+    bme280_int32_t adc_H = dev->bme280_raw.bme280_humidity_raw;
+    double var1, var2, p, var_H;
+
+    var1  = (((double)adc_T) / 16384.0 - ((double)calib_data->dig_T1) / 1024.0) * ((double)calib_data->dig_T2);
+    var2  = ((((double)adc_T) / 131072.0 - ((double)calib_data->dig_T1) / 8192.0) * (((double)adc_T) / 131072.0 - ((double)calib_data->dig_T1) / 8192.0)) * ((double)calib_data->dig_T3);
+    bme280_int32_t t_fine = (bme280_int32_t)(var1 + var2);
+    *T  = (var1 + var2) / 5120.0;
+
+    var1 = ((double)t_fine / 2.0) - 64000.0;
+    var2 = var1 * var1 * ((double)calib_data->dig_P6) / 32768.0;
+    var2 = var2 + var1 * ((double)calib_data->dig_P5) * 2.0;
+    var2 = (var2 / 4.0) + (((double)calib_data->dig_P4) * 65536.0);
+    var1 = (((double)calib_data->dig_P3) * var1 * var1 / 524288.0 + ((double)calib_data->dig_P2) * var1) / 524288.0;
+    var1 = (1.0 + var1 / 32768.0) * ((double)calib_data->dig_P1);
+    if (var1 == 0.0) {
+        return BME280_STATUS_ERROR; // avoid exception caused by division by zero
+    }
+    p = 1048576.0 - (double)adc_P;
+    p = (p - (var2 / 4096.0)) * 6250.0 / var1;
+    var1 = ((double)calib_data->dig_P9) * p * p / 2147483648.0;
+    var2 = p * ((double)calib_data->dig_P8) / 32768.0;
+    *P = p + (var1 + var2 + ((double)calib_data->dig_P7)) / 16.0;
+
+    var_H = (((double)t_fine) - 76800.0);
+    var_H = (adc_H - (((double)calib_data->dig_H4) * 64.0 + ((double)calib_data->dig_H5) / 16384.0 * var_H))
+            * (((double)calib_data->dig_H2) / 65536.0 * (1.0 + ((double)calib_data->dig_H6) / 67108864.0 *
+                    var_H * (1.0 + ((double)calib_data->dig_H3) / 67108864.0 * var_H)));
+    var_H = var_H * (1.0 - ((double)calib_data->dig_H1) * var_H / 524288.0);
+    if (var_H > 100.0)
+        var_H = 100.0;
+    else if (var_H < 0.0)
+        var_H = 0.0;
+    *H = var_H;
 
     return BME280_STATUS_OK;
 }

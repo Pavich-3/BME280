@@ -176,6 +176,7 @@ bme280_status_t bme280_set_mode(bme280_t* dev, bme280_mode_t mode);
 bme280_status_t bme280_read_calibration(bme280_t* dev);
 bme280_status_t bme280_read_raw(bme280_t* dev);
 bme280_status_t bme280_read(bme280_t* dev, bme280_int32_t* T, bme280_uint32_t* H, bme280_uint32_t* P);
+bme280_status_t bme280_read_double(bme280_t* dev, double* T, double* H, double* P);
 
 bme280_status_t bme280_weatherMonitoring(bme280_t* dev, bme280_config_t* cfg);
 bme280_status_t bme280_humiditySensing(bme280_t* dev, bme280_config_t* cfg);

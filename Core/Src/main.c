@@ -52,7 +52,7 @@
 bme280_t bme280Handler = {0};
 bme280_config_t bme280Config = {0};
 
-uint8_t transactionFlag = {0};
+volatile uint8_t transactionFlag = {1};
 
 bme280_int32_t temperatureBuffer = 0;
 bme280_uint32_t pressBuffer = 0;
@@ -122,11 +122,10 @@ int main(void)
     while (1)
     {
         if (transactionFlag) {
-            bme280_read_calibration(&bme280Handler);
             bme280_read_raw(&bme280Handler);
             bme280_read(&bme280Handler, &temperatureBuffer, &humidityBuffer, &pressBuffer);
-            sprintf(uartMessage, "Temperature: ", temperatureBuffer, "Humidity: ", &humidityBuffer, "Press: ", pressBuffer, "\n\0");
-            HAL_UART_Transmit_IT(&huart3, (uint8_t*)uartMessage, sizeof(uartMessage));
+            sprintf(uartMessage, "T: %ld C, H: %lu %%, P: %lu Pa\n", (long)temperatureBuffer, (unsigned long)humidityBuffer, (unsigned long)pressBuffer);
+            HAL_UART_Transmit_IT(&huart3, (uint8_t*)uartMessage, strlen(uartMessage));
             transactionFlag = 0;
         }
         /* USER CODE END WHILE */
@@ -182,7 +181,7 @@ void SystemClock_Config(void)
 
 /* USER CODE BEGIN 4 */
 bme280_status_t i2c_read(uint8_t dev_addr, uint8_t reg_addr, uint8_t* data, uint8_t len, void* ctx) {
-    if (HAL_I2C_Mem_Read_IT((I2C_HandleTypeDef*)ctx, (uint16_t)dev_addr, (uint16_t)reg_addr, I2C_MEMADD_SIZE_8BIT, data, len) != HAL_OK) {
+    if (HAL_I2C_Mem_Read((I2C_HandleTypeDef*)ctx, (uint16_t)dev_addr, (uint16_t)reg_addr, I2C_MEMADD_SIZE_8BIT, data, len, HAL_MAX_DELAY) != HAL_OK) {
         return BME280_STATUS_ERROR;
     } else {
         return BME280_STATUS_OK;
@@ -190,7 +189,7 @@ bme280_status_t i2c_read(uint8_t dev_addr, uint8_t reg_addr, uint8_t* data, uint
 }
 
 bme280_status_t i2c_write(uint8_t dev_addr, uint8_t reg_addr, uint8_t* data, uint8_t len, void* ctx) {
-    if (HAL_I2C_Mem_Write_IT((I2C_HandleTypeDef*)ctx, dev_addr, reg_addr, I2C_MEMADD_SIZE_8BIT, data, len) != HAL_OK) {
+    if (HAL_I2C_Mem_Write((I2C_HandleTypeDef*)ctx, dev_addr, reg_addr, I2C_MEMADD_SIZE_8BIT, data, len, HAL_MAX_DELAY) != HAL_OK) {
         return BME280_STATUS_ERROR;
     } else {
         return BME280_STATUS_OK;
@@ -203,7 +202,7 @@ HAL_StatusTypeDef BME280_Init(void) {
     }
 
     bme280_bus_t bme280_bus = {0};
-    bme280_bus.dev_addr = BME280_I2C_DEVICE_ADDR_GND;
+    bme280_bus.dev_addr = BME280_I2C_DEVICE_ADDR_GND << 1;
     bme280_bus.ctx = &hi2c1;
     bme280_bus.read = i2c_read;
     bme280_bus.write = i2c_write;
@@ -212,6 +211,9 @@ HAL_StatusTypeDef BME280_Init(void) {
         return HAL_ERROR;
     }
     if (bme280_configure(&bme280Handler, &bme280Config) != BME280_STATUS_OK) {
+        return HAL_ERROR;
+    }
+    if (bme280_read_calibration(&bme280Handler) != BME280_STATUS_OK) {
         return HAL_ERROR;
     }
 
